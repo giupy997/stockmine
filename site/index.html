@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>STOCKMINE — mine stocks, not tokens</title>
+  <meta name="description" content="A round game on Robinhood Chain. Every round one square of the grid wins; the rewards are tokenized stocks bought with real fees, not a freshly printed token.">
+  <meta name="theme-color" content="#060705">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23060705'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%2300c805'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="stage" id="top">
+    <div class="aurora" aria-hidden="true"></div>
+
+    <header class="nav">
+      <a class="brand" href="#top" aria-label="Stockmine home"><span class="orb" aria-hidden="true"></span>stockmine</a>
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#grid">Play</a>
+        <a href="#how">Rounds</a>
+        <a href="#pot">Pot</a>
+        <a href="#trust">Trust</a>
+        <a href="#token">Token</a>
+      </nav>
+      <button class="pill pill-green" id="connect" type="button">Connect wallet</button>
+    </header>
+
+    <section class="hero">
+      <p class="kicker"><span class="live-dot"></span>Robinhood Chain · 4663</p>
+      <h1><span>Mine stocks</span><span class="ghost">not tokens</span></h1>
+      <p class="lede">One square of the grid wins every round. A cut of each round and the trading fees of the project token buy <strong>tokenized stocks</strong> on Uniswap. Those shares are the reward. Nothing is printed to pay you.</p>
+      <div class="cta">
+        <a class="pill pill-cream" href="#grid">Open the grid ↓</a>
+        <a class="pill pill-ghost" id="repo-link" href="https://github.com/giupy997/stockmine" target="_blank" rel="noopener">Read the contract</a>
+      </div>
+    </section>
+
+    <section class="cockpit" id="grid" aria-label="The grid">
+      <aside class="panel panel-clock">
+        <div class="ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+            <circle class="ring-value" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="ring-text"><b id="countdown">00</b><small>seconds</small></div>
+        </div>
+        <div class="round-line"><span>Round <b id="round-id">—</b></span><span class="tag" id="mode-tag">SIMULATION</span></div>
+        <div class="hud">
+          <div><small>In this round</small><b id="hud-total">0.000</b><i>ETH</i></div>
+          <div><small>Pot → stocks</small><b id="hud-pot">0.000</b><i>ETH</i></div>
+          <div><small>Rollover</small><b id="hud-rollover">0.000</b><i>ETH</i></div>
+          <div><small>Epoch</small><b id="hud-epoch">0</b><i></i></div>
+        </div>
+      </aside>
+
+      <div class="deck">
+        <div class="board" id="board" role="group" aria-label="Grid of 25 squares"></div>
+        <div class="progress"><span id="progress-bar"></span></div>
+      </div>
+
+      <aside class="panel panel-controls">
+        <form class="controls" id="controls" autocomplete="off">
+          <label class="amount">
+            <span>Total ETH to deploy</span>
+            <input id="amount" type="number" inputmode="decimal" min="0" step="0.001" value="0.01">
+          </label>
+          <div class="quick">
+            <button type="button" class="chip" data-pick="all">All 25</button>
+            <button type="button" class="chip" data-pick="random">Random 5</button>
+            <button type="button" class="chip" data-pick="clear">Clear</button>
+          </div>
+          <button class="pill pill-green wide" id="deploy" type="submit">Deploy on <span id="picked">0</span> squares</button>
+        </form>
+        <div class="actions" id="actions" hidden>
+          <button class="pill pill-ghost" id="draw" type="button" hidden>Draw last round</button>
+          <button class="pill pill-ghost" id="claim" type="button" hidden>Claim</button>
+          <button class="pill pill-ghost" id="claim-stock" type="button" hidden>Claim stocks</button>
+        </div>
+        <p class="status" id="status" role="status">Pick squares, set an amount, deploy.</p>
+      </aside>
+
+      <ol class="feed" id="feed" aria-label="Latest events"></ol>
+    </section>
+
+    <div class="tape" aria-hidden="true">
+      <div class="tape-track">
+        <span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span><span>rewards in real shares</span><span>no emissions</span><span>paid from fees</span>
+        <span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span><span>rewards in real shares</span><span>no emissions</span><span>paid from fees</span>
+      </div>
+    </div>
+  </div>
+
+  <main class="sheet">
+    <section class="block" id="how">
+      <header class="block-head">
+        <span class="index">01</span>
+        <h2>One round, start to finish</h2>
+        <dl class="facts">
+          <div><dt>Grid</dt><dd>5 × 5</dd></div>
+          <div><dt>Round</dt><dd id="fact-round">60 s</dd></div>
+          <div><dt>Cut to the pot</dt><dd id="fact-cut">10 %</dd></div>
+        </dl>
+      </header>
+      <div class="cards">
+        <article class="card"><span class="big">1</span><h3>Deploy</h3><p>Put ETH on one or more squares. Your amount is split equally across the squares you pick.</p></article>
+        <article class="card"><span class="big">2</span><h3>Close</h3><p>When the clock hits zero anyone can close the round. That fixes a block about one second in the future.</p></article>
+        <article class="card"><span class="big">3</span><h3>Draw</h3><p>The hash of that block picks the winning square. Nobody can know it while the round is open.</p></article>
+        <article class="card card-green"><span class="big">4</span><h3>Collect</h3><p>Winners take their stake back plus the ETH of the other squares, pro rata, minus the cut for the pot.</p></article>
+      </div>
+    </section>
+
+    <section class="block" id="pot">
+      <header class="block-head">
+        <span class="index">02</span>
+        <h2>Two streams of ETH become shares</h2>
+        <p class="sub">No reward token is minted in the background. The stocks are bought on Uniswap with ETH that actually came in.</p>
+      </header>
+      <div class="bento">
+        <article class="tile tile-a"><small>Stream A</small><h3>Cut of every round</h3><p>10 % of the losing squares. Hard cap 15 % in the contract.</p></article>
+        <article class="tile tile-b"><small>Stream B</small><h3>Creator fees on Pons</h3><p>The contract is the fee recipient of the project token and pulls the fees itself.</p></article>
+        <article class="tile tile-core"><small>Every epoch</small><h3>Pot → Uniswap → one stock</h3><p>The keeper picks one allowed stock and a minimum amount out. The whole pot is swapped in a single transaction.</p><div class="tickers"><span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span></div></article>
+        <article class="tile tile-c"><small>50 %</small><h3>Miners</h3><p>Shared by the epoch's winners, in proportion to their winning stakes.</p></article>
+        <article class="tile tile-d"><small>50 %</small><h3>Stakers</h3><p>Shared by the people staking the project token, in proportion to their stake.</p></article>
+      </div>
+    </section>
+
+    <section class="block" id="trust">
+      <header class="block-head">
+        <span class="index">03</span>
+        <h2>What the contract allows</h2>
+      </header>
+      <div class="trust">
+        <article class="list list-no">
+          <h3>We cannot</h3>
+          <ul>
+            <li>Touch the ETH players put on the grid. It is accounted apart from the pot.</li>
+            <li>Stop you from closing, drawing or claiming. Pause only blocks new deployments.</li>
+            <li>Raise the cut above 15 % or push the split outside 20–80 %.</li>
+            <li>Mint anything. The token has a fixed supply from its Pons launch.</li>
+          </ul>
+        </article>
+        <article class="list list-yes">
+          <h3>We can</h3>
+          <ul>
+            <li>Choose which allowed stock an epoch buys, and the slippage limit.</li>
+            <li>Add or remove stocks from the allowed list (16 at most).</li>
+            <li>Tune cut, split and unstake delay inside the hard bounds.</li>
+            <li>Point the Pons creator fees at a future version of the contract.</li>
+          </ul>
+        </article>
+        <article class="list list-know">
+          <h3>Know this</h3>
+          <ul>
+            <li>The draw uses the hash of a future L2 block. Players cannot predict it; the chain's sequencer in theory could.</li>
+            <li>The contract has not been audited.</li>
+            <li>This is a game of chance. You can lose all the ETH you put on the grid.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="block" id="token">
+      <div class="token">
+        <span class="index">04</span>
+        <h2>Token: not launched</h2>
+        <p>It comes after the game works, on Pons, with a fixed supply. Staking it will earn a share of every stock purchase. Until a contract address appears <strong>on this page</strong>, anything using this name is not us.</p>
+        <p class="address" id="token-address">token: —</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>
+      <span class="brand"><span class="orb" aria-hidden="true"></span>stockmine</span>
+      <p>Not affiliated with Robinhood Markets, Inc. or with the issuers of any stock. Tokenized stocks are third-party tokens traded on Uniswap. Not available where games of chance with money are prohibited. Nothing here is investment advice.</p>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/giupy997/stockmine" target="_blank" rel="noopener">GitHub</a>
+      <a id="contract-link" href="#" hidden target="_blank" rel="noopener">Contract</a>
+    </div>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

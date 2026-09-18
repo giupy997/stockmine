@@ -120,7 +120,7 @@
       </header>
       <div class="bento">
         <article class="tile tile-a"><small>Stream A</small><h3>Cut of every round</h3><p>7 % of the losing squares. Hard cap 15 % in the contract.</p></article>
-        <article class="tile tile-b"><small>Stream B</small><h3>Creator fees on Pons</h3><p>The contract is the fee recipient of the project token and pulls the fees itself.</p></article>
+        <article class="tile tile-b"><small>Stream B</small><h3>Creator fees on Pons</h3><p>Phase one: the dev wallet collects them on Pons and sends them to the pot by hand. Phase two: the contract becomes the fee recipient and pulls them itself.</p></article>
         <article class="tile tile-core"><small>Every epoch</small><h3>Pot → Uniswap → one stock</h3><p>The keeper picks one allowed stock and a minimum amount out. The whole pot is swapped in a single transaction.</p><div class="tickers"><span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span></div></article>
         <article class="tile tile-c"><small>50 %</small><h3>Miners</h3><p>Shared by the epoch's winners, in proportion to their winning stakes.</p></article>
         <article class="tile tile-d"><small>50 %</small><h3>Stakers</h3><p>Shared by the people staking the project token, in proportion to their stake.</p></article>
@@ -155,6 +155,7 @@
           <h3>Know this</h3>
           <ul>
             <li>The draw uses the hash of a future L2 block. Players cannot predict it; the chain's sequencer in theory could.</li>
+            <li>In phase one the Pons creator fees pass through the dev wallet before they reach the pot. Every transfer is visible on-chain, but it is not enforced by code until the hand-over to the contract, which will be announced on this page.</li>
             <li>The contract has not been audited.</li>
             <li>This is a game of chance. You can lose all the ETH you put on the grid.</li>
           </ul>

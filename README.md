@@ -13,8 +13,8 @@ token, they are **tokenized stocks** bought on Uniswap with real revenue.
 3. **ETH payout.** Players on the winning square get their stake back plus the ETH of the other squares,
    pro rata, minus a cut (7 % by default, 15 % hard cap). If nobody is on the winning square the ETH rolls
    over to the next round that has winners.
-4. **The pot.** The cut of every round and the **Pons creator fees** of the project token (this contract is
-   the `creatorFeeRecipient`; `harvest()` pulls them from the Pons escrow) accumulate as ETH in `potEth`.
+4. **The pot.** The cut of every round and the **Pons creator fees** of the project token accumulate as ETH
+   in `potEth`. Any ETH sent to the contract joins the pot. See "Fee phases" for who collects the Pons fees.
 5. **Epochs.** The keeper calls `closeEpoch(stock, poolFee, minOut)`: the whole pot is swapped for one
    allowed stock (NVDA, TSLA, SPY, AAPL, ...) through SwapRouter02 and split between
    - the **miners** of the epoch, in proportion to their winning stakes (`claimStock`), and
@@ -22,8 +22,34 @@ token, they are **tokenized stocks** bought on Uniswap with real revenue.
    The split is 50/50 by default (20–80 % bounds). With no stakers everything goes to miners and vice versa.
 
 The project token is a plain fixed-supply Pons token: nothing is ever minted as a reward, which is why the
-design fits a Pons launch. The contract is deployed **before** the token so the launch can name it as fee
-recipient; `setToken` then binds the token once.
+design fits a Pons launch. `setToken` binds the token to the contract once, after the launch.
+
+## Fee phases
+
+Launch parameters decided so far: creator tax 1 % (`creatorTaxBps = 100`, immutable after launch), so the
+creator side earns 1.7 % of every trade in ETH (0.7 % from the base fee plus the 1 % tax).
+
+**Phase one: dev wallet is the Pons fee recipient.** The token is launched with the dev wallet as
+`creatorFeeRecipient`. The dev claims the fees on Pons and forwards ETH to the contract, as much and as often
+as they choose (this is also how the fees get spread over time instead of landing in one epoch). This phase
+relies on trust: the transfers are public, but nothing in code forces them.
+
+```bash
+# claim what Pons owes the dev wallet (or use the Pons site)
+cast send 0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e "claim()" --rpc-url robinhood --private-key $PRIVATE_KEY
+# send part of it to the pot
+cast send $STOCKMINE --value 0.5ether --rpc-url robinhood --private-key $PRIVATE_KEY
+```
+
+**Phase two: the contract is the recipient.** Once the game has run cleanly, the dev wallet hands the fee
+stream to the contract with one transaction on the Pons factory. From then on `harvest()` (open to anyone,
+and called by every `closeEpoch`) pulls the fees straight into the pot, and the owner keeps `migrateFees` as
+the emergency exit. Try this on a fork before doing it for real: it has not been exercised yet.
+
+```bash
+cast send 0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e "transferCreatorFeeRecipient(address,address)" \
+  $TOKEN $STOCKMINE --rpc-url robinhood --private-key $PRIVATE_KEY
+```
 
 ## Trust model
 

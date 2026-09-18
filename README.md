@@ -11,7 +11,7 @@ token, they are **tokenized stocks** bought on Uniswap with real revenue.
    The hash is only readable for ~25 s (256 L2 blocks); if nobody settles in time, `close` can be called
    again and the round is drawn on a new block.
 3. **ETH payout.** Players on the winning square get their stake back plus the ETH of the other squares,
-   pro rata, minus a cut (10 % by default, 15 % hard cap). If nobody is on the winning square the ETH rolls
+   pro rata, minus a cut (7 % by default, 15 % hard cap). If nobody is on the winning square the ETH rolls
    over to the next round that has winners.
 4. **The pot.** The cut of every round and the **Pons creator fees** of the project token (this contract is
    the `creatorFeeRecipient`; `harvest()` pulls them from the Pons escrow) accumulate as ETH in `potEth`.

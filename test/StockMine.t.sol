@@ -197,22 +197,22 @@ contract StockMineTest is Test {
         assertEq(winner, w);
         assertEq(total, 12 ether);
         assertEq(winnersStake, 4 ether);
-        assertEq(prize, 7.2 ether); // 8 ETH lost, 10% cut
-        assertEq(game.potEth(), 0.8 ether);
+        assertEq(prize, 7.44 ether); // 8 ETH lost, 7% cut
+        assertEq(game.potEth(), 0.56 ether);
 
-        assertEq(game.claimable(0, alice), 1 ether + 1.8 ether);
-        assertEq(game.claimable(0, bob), 3 ether + 5.4 ether);
+        assertEq(game.claimable(0, alice), 1 ether + 1.86 ether);
+        assertEq(game.claimable(0, bob), 3 ether + 5.58 ether);
         assertEq(game.claimable(0, carol), 0);
 
         uint256 before = alice.balance;
         vm.prank(alice);
         game.claim(_one(0));
-        assertEq(alice.balance - before, 2.8 ether);
+        assertEq(alice.balance - before, 2.86 ether);
 
         // a second claim pays nothing
         vm.prank(alice);
         game.claim(_one(0));
-        assertEq(alice.balance - before, 2.8 ether);
+        assertEq(alice.balance - before, 2.86 ether);
 
         vm.prank(bob);
         game.claim(_one(0));
@@ -225,8 +225,8 @@ contract StockMineTest is Test {
         uint8 w0 = _predict(0);
         _deploy(alice, _bit(_other(w0)), 5 ether);
         _finish(0);
-        assertEq(game.rollover(), 4.5 ether);
-        assertEq(game.potEth(), 0.5 ether);
+        assertEq(game.rollover(), 4.65 ether);
+        assertEq(game.potEth(), 0.35 ether);
         assertEq(game.claimable(0, alice), 0);
 
         uint256 round = game.currentRound();
@@ -234,7 +234,7 @@ contract StockMineTest is Test {
         _deploy(bob, _bit(w1), 1 ether);
         _finish(round);
         assertEq(game.rollover(), 0);
-        assertEq(game.claimable(round, bob), 1 ether + 4.5 ether);
+        assertEq(game.claimable(round, bob), 1 ether + 4.65 ether);
     }
 
     function test_claim_revertsOnUnsettledRound() public {
@@ -283,20 +283,20 @@ contract StockMineTest is Test {
         _deploy(bob, _bit(w), 3 ether);
         _deploy(bob, _bit(_other(w)), 10 ether);
         _finish(0);
-        assertEq(game.potEth(), 1 ether);
+        assertEq(game.potEth(), 0.7 ether);
 
         // creator fees waiting in the Pons escrow
         escrow.credit{value: 2 ether}(address(game));
 
         vm.prank(keeper);
-        game.closeEpoch(address(nvda), 500, 30e18);
+        game.closeEpoch(address(nvda), 500, 27e18);
 
-        // 3 ETH at 10 NVDA per ETH, half to miners and half to stakers
+        // 2.7 ETH at 10 NVDA per ETH, half to miners and half to stakers
         assertEq(game.epoch(), 1);
         assertEq(game.potEth(), 0);
-        assertEq(game.epochStock(0), 15e18);
+        assertEq(game.epochStock(0), 13.5e18);
         assertEq(game.epochToken(0), address(nvda));
-        assertEq(nvda.balanceOf(address(game)), 30e18);
+        assertEq(nvda.balanceOf(address(game)), 27e18);
 
         vm.prank(alice);
         game.claim(_one(0));
@@ -304,17 +304,17 @@ contract StockMineTest is Test {
         game.claim(_one(0));
 
         (, uint256 aliceOwed) = game.claimableStock(0, alice);
-        assertEq(aliceOwed, 3.75e18);
+        assertEq(aliceOwed, 3.375e18);
         vm.prank(alice);
         game.claimStock(_one(0));
         vm.prank(bob);
         game.claimStock(_one(0));
-        assertEq(nvda.balanceOf(alice), 3.75e18);
-        assertEq(nvda.balanceOf(bob), 11.25e18);
+        assertEq(nvda.balanceOf(alice), 3.375e18);
+        assertEq(nvda.balanceOf(bob), 10.125e18);
 
         vm.prank(carol);
         game.claimStaking();
-        assertEq(nvda.balanceOf(carol), 15e18);
+        assertEq(nvda.balanceOf(carol), 13.5e18);
         assertEq(nvda.balanceOf(address(game)), 0);
     }
 
@@ -332,18 +332,18 @@ contract StockMineTest is Test {
 
         vm.prank(keeper);
         game.closeEpoch(address(nvda), 500, 0);
-        // nobody staked: the miners get all 2 ETH worth of stock
-        assertEq(game.epochStock(0), 20e18);
+        // nobody staked: the miners get all 1.4 ETH worth of stock
+        assertEq(game.epochStock(0), 14e18);
 
         vm.startPrank(alice);
         game.claim(_one(0));
         game.claimStock(_one(0));
-        assertEq(nvda.balanceOf(alice), 10e18);
+        assertEq(nvda.balanceOf(alice), 7e18);
         game.claimStock(_one(0));
-        assertEq(nvda.balanceOf(alice), 10e18);
+        assertEq(nvda.balanceOf(alice), 7e18);
         game.claim(_one(round));
         game.claimStock(_one(0));
-        assertEq(nvda.balanceOf(alice), 20e18);
+        assertEq(nvda.balanceOf(alice), 14e18);
         vm.stopPrank();
     }
 
@@ -376,8 +376,8 @@ contract StockMineTest is Test {
 
         vm.prank(keeper);
         vm.expectRevert(bytes("Too little received"));
-        game.closeEpoch(address(nvda), 500, 10e18 + 1);
-        assertEq(game.potEth(), 1 ether);
+        game.closeEpoch(address(nvda), 500, 7e18 + 1);
+        assertEq(game.potEth(), 0.7 ether);
         assertEq(game.epoch(), 0);
     }
 
@@ -484,6 +484,7 @@ contract StockMineTest is Test {
     }
 
     function test_admin_boundsAndRoles() public {
+        assertEq(game.cutBps(), 700);
         vm.expectRevert(StockMine.BadParam.selector);
         game.setParams(1_501, 5_000, 1 days);
         vm.expectRevert(StockMine.BadParam.selector);

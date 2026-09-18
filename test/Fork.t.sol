@@ -67,11 +67,11 @@ contract ForkTest is Test {
         game.close(round);
         arb.roll(game.TARGET_DELAY() + 1);
         game.settle(round);
-        assertEq(game.potEth(), 0.2 ether);
+        assertEq(game.potEth(), 0.14 ether);
 
         game.closeEpoch(NVDA, 500, 1);
         uint256 bought = game.epochStock(0);
-        console2.log("NVDA bought with 0.2 ETH (1e18):", bought);
+        console2.log("NVDA bought with 0.14 ETH (1e18):", bought);
         assertGt(bought, 0);
 
         vm.startPrank(alice);
@@ -79,7 +79,7 @@ contract ForkTest is Test {
         game.claimStock(_one(0));
         vm.stopPrank();
         assertEq(IERC20(NVDA).balanceOf(alice), bought);
-        assertEq(alice.balance, 10 ether + 1.8 ether);
+        assertEq(alice.balance, 10 ether + 1.86 ether);
     }
 
     function test_fork_everyListedStockCanBeBoughtAndPaidOut() public {

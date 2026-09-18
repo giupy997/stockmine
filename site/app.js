@@ -127,7 +127,7 @@ function tickClock() {
 function startSimulation() {
   ui.tag.textContent = "SIMULATION";
   ui.connect.addEventListener("click", () => say("The wallet connects once the contract is live. This grid is a simulation.", ""));
-  const CUT = 1000n;
+  const CUT = 700n;
   const STOCKS = Object.values(CONFIG.STOCKS);
   const sim = { genesis: Date.now() / 1000, revealing: false };
   view.duration = 20;

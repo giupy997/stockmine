@@ -44,7 +44,7 @@ contract StockMine {
     address public pendingOwner;
     address public keeper;
     bool public paused;
-    uint256 public cutBps = 1_000;
+    uint256 public cutBps = 700;
     uint256 public minersShareBps = 5_000;
     uint256 public unstakeDelay = 3 days;
 

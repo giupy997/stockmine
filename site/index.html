@@ -13,20 +13,23 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Stockmine home"><span class="orb" aria-hidden="true"></span>stockmine</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#grid">Play</a>
+      <a href="#how">Rounds</a>
+      <a href="#pot">Pot</a>
+      <a href="#stake">Stake</a>
+      <a href="#trust">Trust</a>
+      <a href="#token">Token</a>
+    </nav>
+    <button class="pill pill-green" id="connect" type="button">Connect wallet</button>
+  </header>
+
   <div class="stage" id="top">
     <div class="aurora" aria-hidden="true"></div>
-
-    <header class="nav">
-      <a class="brand" href="#top" aria-label="Stockmine home"><span class="orb" aria-hidden="true"></span>stockmine</a>
-      <nav class="nav-links" aria-label="Sections">
-        <a href="#grid">Play</a>
-        <a href="#how">Rounds</a>
-        <a href="#pot">Pot</a>
-        <a href="#trust">Trust</a>
-        <a href="#token">Token</a>
-      </nav>
-      <button class="pill pill-green" id="connect" type="button">Connect wallet</button>
-    </header>
+    <div class="floor" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
 
     <section class="hero">
       <p class="kicker"><span class="live-dot"></span>Robinhood Chain · 4663</p>
@@ -36,6 +39,11 @@
         <a class="pill pill-cream" href="#grid">Open the grid ↓</a>
         <a class="pill pill-ghost" id="repo-link" href="https://github.com/giupy997/stockmine" target="_blank" rel="noopener">Read the contract</a>
       </div>
+      <ul class="hero-stats" aria-label="Key numbers">
+        <li><b id="stat-cut">7%</b><span>of the losing squares goes to the pot</span></li>
+        <li><b id="stat-split">50 / 50</b><span>pot split: miners and stakers</span></li>
+        <li><b>0</b><span>tokens minted as rewards</span></li>
+      </ul>
     </section>
 
     <section class="cockpit" id="grid" aria-label="The grid">
@@ -62,10 +70,10 @@
       </div>
 
       <aside class="panel panel-controls">
-        <form class="controls" id="controls" autocomplete="off">
+        <form class="controls" id="controls" autocomplete="off" novalidate>
           <label class="amount">
             <span>Total ETH to deploy</span>
-            <input id="amount" type="number" inputmode="decimal" min="0" step="0.001" value="0.01">
+            <input id="amount" type="number" inputmode="decimal" min="0" step="any" value="0.01">
           </label>
           <div class="quick">
             <button type="button" class="chip" data-pick="all">All 25</button>
@@ -105,10 +113,10 @@
         </dl>
       </header>
       <div class="cards">
-        <article class="card"><span class="big">1</span><h3>Deploy</h3><p>Put ETH on one or more squares. Your amount is split equally across the squares you pick.</p></article>
-        <article class="card"><span class="big">2</span><h3>Close</h3><p>When the clock hits zero anyone can close the round. That fixes a block about one second in the future.</p></article>
-        <article class="card"><span class="big">3</span><h3>Draw</h3><p>The hash of that block picks the winning square. Nobody can know it while the round is open.</p></article>
-        <article class="card card-green"><span class="big">4</span><h3>Collect</h3><p>Winners take their stake back plus the ETH of the other squares, pro rata, minus the cut for the pot.</p></article>
+        <article class="card reveal"><span class="big">1</span><h3>Deploy</h3><p>Put ETH on one or more squares. Your amount is split equally across the squares you pick.</p></article>
+        <article class="card reveal"><span class="big">2</span><h3>Close</h3><p>When the clock hits zero anyone can close the round. That fixes a block about one second in the future.</p></article>
+        <article class="card reveal"><span class="big">3</span><h3>Draw</h3><p>The hash of that block picks the winning square. Nobody can know it while the round is open.</p></article>
+        <article class="card card-green reveal"><span class="big">4</span><h3>Collect</h3><p>Winners take their stake back plus the ETH of the other squares, pro rata, minus the cut for the pot.</p></article>
       </div>
     </section>
 
@@ -119,21 +127,56 @@
         <p class="sub">No reward token is minted in the background. The stocks are bought on Uniswap with ETH that actually came in.</p>
       </header>
       <div class="bento">
-        <article class="tile tile-a"><small>Stream A</small><h3>Cut of every round</h3><p>7 % of the losing squares. Hard cap 15 % in the contract.</p></article>
-        <article class="tile tile-b"><small>Stream B</small><h3>Creator fees on Pons</h3><p>Phase one: the dev wallet collects them on Pons and sends them to the pot by hand. Phase two: the contract becomes the fee recipient and pulls them itself.</p></article>
-        <article class="tile tile-core"><small>Every epoch</small><h3>Pot → Uniswap → one stock</h3><p>The keeper picks one allowed stock and a minimum amount out. The whole pot is swapped in a single transaction.</p><div class="tickers"><span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span></div></article>
-        <article class="tile tile-c"><small>50 %</small><h3>Miners</h3><p>Shared by the epoch's winners, in proportion to their winning stakes.</p></article>
-        <article class="tile tile-d"><small>50 %</small><h3>Stakers</h3><p>Shared by the people staking the project token, in proportion to their stake.</p></article>
+        <article class="tile tile-a reveal"><small>Stream A</small><h3>Cut of every round</h3><p><span id="tile-cut">7 %</span> of the losing squares. Hard cap 15 % in the contract.</p></article>
+        <article class="tile tile-b reveal"><small>Stream B</small><h3>Creator fees on Pons</h3><p>Phase one: the dev wallet collects them on Pons and sends them to the pot by hand. Phase two: the contract becomes the fee recipient and pulls them itself.</p></article>
+        <article class="tile tile-core reveal"><small>Every epoch</small><h3>Pot → Uniswap → one stock</h3><p>The keeper picks one allowed stock and a minimum amount out. The whole pot is swapped in a single transaction.</p><div class="tickers"><span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span></div></article>
+        <article class="tile tile-c reveal"><small id="split-miners">50 %</small><h3>Miners</h3><p>Shared by the epoch's winners, in proportion to their winning stakes.</p></article>
+        <article class="tile tile-d reveal"><small id="split-stakers">50 %</small><h3>Stakers</h3><p>Shared by the people staking the project token, in proportion to their stake. While nobody stakes, the whole purchase goes to the miners, and the other way round.</p></article>
+      </div>
+    </section>
+
+    <section class="block" id="stake">
+      <div class="vault reveal">
+        <div class="vault-copy">
+          <div class="vault-head"><span class="index">03</span><span class="tag" id="stake-tag">SIMULATION</span></div>
+          <h2>Stake the token, earn the shares</h2>
+          <p>Half of every stock purchase is shared by the people staking the project token, in proportion to their stake. You stake and unstake here, from this page. After each new stake your tokens stay locked for <b id="stake-delay">3 days</b>.</p>
+          <dl class="vault-stats">
+            <div><dt>Your stake</dt><dd id="stake-mine">0</dd></div>
+            <div><dt>Total staked</dt><dd id="stake-total">0</dd></div>
+            <div><dt>Your share</dt><dd id="stake-share">0.00 %</dd></div>
+            <div><dt>Unlocks</dt><dd id="stake-unlock">—</dd></div>
+          </dl>
+        </div>
+
+        <div class="vault-panel">
+          <label class="amount">
+            <span>Amount · wallet balance <b id="stake-balance">0</b> <i id="stake-symbol">tokens</i></span>
+            <div class="amount-row">
+              <input id="stake-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+              <button type="button" class="chip" id="stake-max">Max</button>
+            </div>
+          </label>
+          <div class="vault-buttons">
+            <button class="pill pill-green" id="stake-btn" type="button">Stake</button>
+            <button class="pill pill-ghost" id="unstake-btn" type="button">Unstake</button>
+          </div>
+          <div class="earned">
+            <div class="earned-head"><span>Shares earned</span><button class="chip" id="stake-claim" type="button" disabled>Claim</button></div>
+            <ul id="stake-earned"></ul>
+          </div>
+          <p class="status" id="stake-status" role="status"></p>
+        </div>
       </div>
     </section>
 
     <section class="block" id="trust">
       <header class="block-head">
-        <span class="index">03</span>
+        <span class="index">04</span>
         <h2>What the contract allows</h2>
       </header>
       <div class="trust">
-        <article class="list list-no">
+        <article class="list list-no reveal">
           <h3>We cannot</h3>
           <ul>
             <li>Touch the ETH players put on the grid. It is accounted apart from the pot.</li>
@@ -142,16 +185,16 @@
             <li>Mint anything. The token has a fixed supply from its Pons launch.</li>
           </ul>
         </article>
-        <article class="list list-yes">
+        <article class="list list-yes reveal">
           <h3>We can</h3>
           <ul>
             <li>Choose which allowed stock an epoch buys, and the slippage limit.</li>
             <li>Add or remove stocks from the allowed list (16 at most).</li>
             <li>Tune cut, split and unstake delay inside the hard bounds.</li>
-            <li>Point the Pons creator fees at a future version of the contract.</li>
+            <li>Redirect the Pons creator fees to another address. It is meant for a future version of the contract, but the code accepts any address.</li>
           </ul>
         </article>
-        <article class="list list-know">
+        <article class="list list-know reveal">
           <h3>Know this</h3>
           <ul>
             <li>The draw uses the hash of a future L2 block. Players cannot predict it; the chain's sequencer in theory could.</li>
@@ -164,17 +207,18 @@
     </section>
 
     <section class="block" id="token">
-      <div class="token">
-        <span class="index">04</span>
-        <h2>Token: not launched</h2>
-        <p>It comes after the game works, on Pons, with a fixed supply. Staking it will earn a share of every stock purchase. Until a contract address appears <strong>on this page</strong>, anything using this name is not us.</p>
+      <div class="token reveal">
+        <span class="index">05</span>
+        <h2 id="token-title">Token: not launched</h2>
+        <p id="token-note">It comes after the game works, on Pons, with a fixed supply. Staking it will earn a share of every stock purchase. Until a contract address appears <strong>on this page</strong>, anything using this name is not us.</p>
         <p class="address" id="token-address">token: —</p>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <div>
+    <div class="wordmark" aria-hidden="true">stockmine</div>
+    <div class="footer-copy">
       <span class="brand"><span class="orb" aria-hidden="true"></span>stockmine</span>
       <p>Not affiliated with Robinhood Markets, Inc. or with the issuers of any stock. Tokenized stocks are third-party tokens traded on Uniswap. Not available where games of chance with money are prohibited. Nothing here is investment advice.</p>
     </div>

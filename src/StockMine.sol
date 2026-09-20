@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IArbSys, IERC20, ISwapRouter02, IPonsEscrow, IPonsFactory} from "./Interfaces.sol";
+import {IArbSys, IERC20, ISwapRouter02, IPonsEscrow, IPonsFactory, IPonsCurve, IPonsRouter} from "./Interfaces.sol";
 
 /// @title StockMine
 /// @notice Round game on a 5x5 grid for Robinhood Chain. Players put ETH on squares, one square wins each
 ///         round and its players share the ETH of the other squares. A cut of every round, plus the Pons
-///         creator fees of the project token, fills a pot that buys tokenized stocks; the stocks go to the
-///         round winners ("miners") and to the stakers of the project token.
+///         creator fees of the project token, fills a pot. Every epoch a slice of the pot is set aside to buy
+///         the project token back and burn it; the rest buys tokenized stocks, which go to the round winners
+///         ("miners") and to the stakers of the project token.
 /// @dev    Player funds never touch the pot and no role can move them: the owner and the keeper can only
 ///         tune bounded parameters, choose which allowed stock an epoch buys and with which slippage.
 contract StockMine {
@@ -18,7 +19,9 @@ contract StockMine {
     uint256 public constant MAX_CUT_BPS = 1_500;
     uint256 public constant MIN_MINERS_SHARE_BPS = 2_000;
     uint256 public constant MAX_MINERS_SHARE_BPS = 8_000;
+    uint256 public constant MAX_BURN_BPS = 3_000;
     uint256 public constant MAX_UNSTAKE_DELAY = 14 days;
+    address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
     uint256 public constant MAX_STOCKS = 16;
     /// @dev L2 blocks between `close` and the block whose hash decides the round (~1 s on Robinhood Chain).
     uint256 public constant TARGET_DELAY = 10;
@@ -37,6 +40,9 @@ contract StockMine {
     ISwapRouter02 public immutable router;
     IPonsEscrow public immutable ponsEscrow;
     IPonsFactory public immutable ponsFactory;
+    IPonsRouter public immutable ponsRouter;
+    address public immutable ponsHook;
+    address public immutable ponsPoolManager;
 
     // ------------------------------------------------------------------ roles and parameters
 
@@ -45,11 +51,20 @@ contract StockMine {
     address public keeper;
     bool public paused;
     uint256 public cutBps = 700;
+    /// @notice Share of the stock purchase that goes to miners; the rest goes to stakers.
     uint256 public minersShareBps = 5_000;
+    /// @notice Share of every pot set aside for buyback and burn before the stocks are bought.
+    uint256 public burnBps = 2_000;
     uint256 public unstakeDelay = 3 days;
 
     /// @notice The project token (launched on Pons after this contract exists). Set once.
     IERC20 public token;
+    /// @notice The Pons bonding curve of the project token. Set once, together with the token.
+    IPonsCurve public ponsCurve;
+    /// @notice Fee and tick spacing of the Uniswap v4 pool the launch graduates into, read from the Pons
+    ///         factory when the token is bound (they are per-launch settings, not protocol constants).
+    uint24 public ponsPoolFee;
+    int24 public ponsPoolTickSpacing;
 
     // ------------------------------------------------------------------ rounds
 
@@ -77,6 +92,10 @@ contract StockMine {
     uint256 public potEth;
     /// @notice ETH of rounds nobody won, added to the prize of the next round that has winners.
     uint256 public rollover;
+    /// @notice ETH set aside by closed epochs, waiting to buy the project token back and burn it.
+    uint256 public burnEth;
+    /// @notice Project tokens bought back and sent to the burn address so far.
+    uint256 public totalBurned;
 
     // ------------------------------------------------------------------ epochs (stock rewards for miners)
 
@@ -110,13 +129,16 @@ contract StockMine {
     event Claimed(address indexed player, uint256 amount);
     event PotFunded(address indexed from, uint256 amount);
     event EpochClosed(uint256 indexed epoch, address indexed stock, uint256 ethSpent, uint256 bought, uint256 toMiners, uint256 toStakers);
+    event BurnFunded(uint256 indexed epoch, uint256 eth);
+    event BoughtBackAndBurned(uint256 ethSpent, uint256 tokensBurned, bool onCurve);
+    event BurnReleased(uint256 eth);
     event StockClaimed(address indexed account, address indexed stock, uint256 amount);
     event Staked(address indexed account, uint256 amount);
     event Unstaked(address indexed account, uint256 amount);
     event StockSet(address indexed stock, bool allowed);
-    event ParamsSet(uint256 cutBps, uint256 minersShareBps, uint256 unstakeDelay);
+    event ParamsSet(uint256 cutBps, uint256 minersShareBps, uint256 burnBps, uint256 unstakeDelay);
     event KeeperSet(address indexed keeper);
-    event TokenSet(address indexed token);
+    event TokenSet(address indexed token, address indexed curve);
     event PausedSet(bool paused);
     event OwnershipTransferStarted(address indexed from, address indexed to);
     event OwnershipTransferred(address indexed from, address indexed to);
@@ -170,7 +192,10 @@ contract StockMine {
         address weth_,
         address router_,
         address ponsEscrow_,
-        address ponsFactory_
+        address ponsFactory_,
+        address ponsRouter_,
+        address ponsHook_,
+        address ponsPoolManager_
     ) {
         if (roundDuration_ < 10 || roundDuration_ > 1 days) revert BadParam();
         owner = msg.sender;
@@ -182,6 +207,9 @@ contract StockMine {
         router = ISwapRouter02(router_);
         ponsEscrow = IPonsEscrow(ponsEscrow_);
         ponsFactory = IPonsFactory(ponsFactory_);
+        ponsRouter = IPonsRouter(ponsRouter_);
+        ponsHook = ponsHook_;
+        ponsPoolManager = ponsPoolManager_;
         emit OwnershipTransferred(address(0), msg.sender);
     }
 
@@ -313,10 +341,11 @@ contract StockMine {
         } catch {}
     }
 
-    /// @notice Spend the pot on one allowed stock and share it between this epoch's miners and the stakers.
+    /// @notice Close the epoch: set the burn slice of the pot aside, spend the rest on one allowed stock and
+    ///         share that stock between this epoch's miners and the stakers.
     /// @param stock   the tokenized stock to buy (must be allowed)
     /// @param poolFee Uniswap v3 fee tier of the WETH/stock pool to route through
-    /// @param minOut  minimum stock amount accepted for the whole pot (slippage guard set by the keeper)
+    /// @param minOut  minimum stock amount accepted for the stock purchase (slippage guard set by the keeper)
     function closeEpoch(address stock, uint24 poolFee, uint256 minOut) external onlyKeeper nonReentrant {
         if (!stockAllowed[stock]) revert StockNotAllowed();
         harvest();
@@ -326,6 +355,14 @@ contract StockMine {
         uint256 eth = potEth;
         if (eth == 0 || (pts == 0 && st == 0)) revert NothingToDistribute();
         potEth = 0;
+
+        // no burn slice until there is a token to buy back
+        if (address(ponsCurve) != address(0) && burnBps != 0) {
+            uint256 toBurn = (eth * burnBps) / BPS;
+            burnEth += toBurn;
+            eth -= toBurn;
+            emit BurnFunded(epoch, toBurn);
+        }
 
         uint256 before = IERC20(stock).balanceOf(address(this));
         router.exactInputSingle{value: eth}(
@@ -352,6 +389,56 @@ contract StockMine {
 
         emit EpochClosed(epoch, stock, eth, bought, toMiners, toStakers);
         ++epoch;
+    }
+
+    /// @notice Spend part of the burn reserve on the project token and send what it buys to the burn address.
+    ///         The token is bought on its Pons curve until it graduates, then on its Uniswap v4 pool.
+    /// @param ethAmount how much of `burnEth` to spend (the keeper can split a large reserve in slices)
+    /// @param minOut    minimum amount of tokens accepted (slippage guard set by the keeper)
+    function buybackAndBurn(uint256 ethAmount, uint256 minOut) external onlyKeeper nonReentrant {
+        if (address(ponsCurve) == address(0)) revert TokenNotSet();
+        if (ethAmount == 0 || ethAmount > burnEth) revert BadAmount();
+        burnEth -= ethAmount;
+
+        // staked tokens live in this contract too: only the difference is burned
+        uint256 before = token.balanceOf(address(this));
+        uint256 potBefore = potEth;
+        bool onCurve = !ponsCurve.graduated();
+        if (onCurve) {
+            ponsCurve.buy{value: ethAmount}(ethAmount, minOut, address(this));
+        } else {
+            // a sold-out curve whose pool was never created: anyone may create it, so try before swapping
+            try ponsFactory.createGraduatedPool(address(token)) {} catch {}
+            IPonsRouter.Step[] memory steps = new IPonsRouter.Step[](1);
+            steps[0] = IPonsRouter.Step({
+                kind: 2,
+                tokenIn: address(0),
+                tokenOut: address(token),
+                pool: address(0),
+                fee: ponsPoolFee,
+                tickSpacing: ponsPoolTickSpacing,
+                hooks: ponsHook,
+                hookData: "",
+                manager: ponsPoolManager,
+                poolId: bytes32(0)
+            });
+            ponsRouter.swap{value: ethAmount}(steps, address(0), ethAmount, minOut, block.timestamp);
+        }
+        uint256 bought = token.balanceOf(address(this)) - before;
+        if (bought < minOut || bought == 0) revert BadAmount();
+
+        // the buy that graduates a curve only uses part of the ETH and sends the rest back; receive() booked
+        // that refund as pot, but it is still burn money
+        uint256 refund = potEth - potBefore;
+        if (refund > ethAmount) refund = ethAmount;
+        if (refund != 0) {
+            potEth -= refund;
+            burnEth += refund;
+        }
+
+        totalBurned += bought;
+        _sendToken(address(token), BURN_ADDRESS, bought);
+        emit BoughtBackAndBurned(ethAmount - refund, bought, onCurve);
     }
 
     /// @notice Collect the stocks earned as a miner in closed epochs.
@@ -490,14 +577,28 @@ contract StockMine {
         emit StockSet(stock, allowed);
     }
 
-    function setParams(uint256 cutBps_, uint256 minersShareBps_, uint256 unstakeDelay_) external onlyOwner {
+    function setParams(uint256 cutBps_, uint256 minersShareBps_, uint256 burnBps_, uint256 unstakeDelay_)
+        external
+        onlyOwner
+    {
         if (cutBps_ > MAX_CUT_BPS) revert BadParam();
         if (minersShareBps_ < MIN_MINERS_SHARE_BPS || minersShareBps_ > MAX_MINERS_SHARE_BPS) revert BadParam();
+        if (burnBps_ > MAX_BURN_BPS) revert BadParam();
         if (unstakeDelay_ > MAX_UNSTAKE_DELAY) revert BadParam();
         cutBps = cutBps_;
         minersShareBps = minersShareBps_;
+        burnBps = burnBps_;
         unstakeDelay = unstakeDelay_;
-        emit ParamsSet(cutBps_, minersShareBps_, unstakeDelay_);
+        emit ParamsSet(cutBps_, minersShareBps_, burnBps_, unstakeDelay_);
+    }
+
+    /// @notice Give burn reserve back to the pot, where it buys stocks for the players. The way out if the
+    ///         buyback route ever stops working; the ETH cannot go anywhere else.
+    function releaseBurnEth(uint256 amount) external onlyOwner {
+        if (amount == 0 || amount > burnEth) revert BadAmount();
+        burnEth -= amount;
+        potEth += amount;
+        emit BurnReleased(amount);
     }
 
     function setKeeper(address keeper_) external onlyOwner {
@@ -511,12 +612,24 @@ contract StockMine {
         emit PausedSet(paused_);
     }
 
-    /// @notice Bind the project token once it exists on Pons. Cannot be changed afterwards.
-    function setToken(address token_) external onlyOwner {
+    /// @notice Bind the project token and its Pons curve once the launch exists. Cannot be changed afterwards.
+    ///         The pair must be the one the Pons factory itself recorded, and it must be priced in ETH.
+    function setToken(address token_, address curve_) external onlyOwner {
         if (address(token) != address(0)) revert TokenAlreadySet();
-        if (token_ == address(0)) revert BadParam();
+        if (token_ == address(0) || curve_ == address(0)) revert BadParam();
+
+        (bool ok, bytes memory ret) =
+            address(ponsFactory).staticcall(abi.encodeWithSignature("getLaunchedToken(address)", token_));
+        if (!ok || ret.length < 256) revert BadParam();
+        (address launched, address curve,,, address pairToken,, uint24 poolFee, int24 tickSpacing) =
+            abi.decode(ret, (address, address, address, address, address, uint256, uint24, int24));
+        if (launched != token_ || curve != curve_ || pairToken != address(0)) revert BadParam();
+
         token = IERC20(token_);
-        emit TokenSet(token_);
+        ponsCurve = IPonsCurve(curve_);
+        ponsPoolFee = poolFee;
+        ponsPoolTickSpacing = tickSpacing;
+        emit TokenSet(token_, curve_);
     }
 
     /// @notice Point the Pons creator fees of the project token at a new recipient (e.g. a later version of

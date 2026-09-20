@@ -3,9 +3,14 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {StockMine} from "../src/StockMine.sol";
-import {MockArbSys, MockERC20, MockRouter, MockEscrow, MockFactory} from "./Mocks.sol";
+import {MockArbSys, MockERC20, MockRouter, MockEscrow, MockFactory, MockCurve, MockPonsRouter} from "./Mocks.sol";
 
 contract StockMineTest is Test {
+    event EpochClosed(uint256 indexed epoch, address indexed stock, uint256 ethSpent, uint256 bought, uint256 toMiners, uint256 toStakers);
+    event BurnFunded(uint256 indexed epoch, uint256 eth);
+    event BoughtBackAndBurned(uint256 ethSpent, uint256 tokensBurned, bool onCurve);
+    event BurnReleased(uint256 eth);
+
     uint256 constant ROUND = 60;
     uint256 constant MIN = 0.0001 ether;
 
@@ -17,7 +22,12 @@ contract StockMineTest is Test {
     MockRouter router;
     MockEscrow escrow;
     MockFactory factory;
+    MockCurve curve;
+    MockPonsRouter ponsRouter;
 
+    address constant DEAD = 0x000000000000000000000000000000000000dEaD;
+    address hook = makeAddr("pons-hook");
+    address poolManager = makeAddr("pool-manager");
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");
     address carol = makeAddr("carol");
@@ -35,11 +45,14 @@ contract StockMineTest is Test {
         router = new MockRouter();
         escrow = new MockEscrow();
         factory = new MockFactory();
+        curve = new MockCurve(token);
+        ponsRouter = new MockPonsRouter();
+        factory.setLaunch(address(token), address(curve), address(0), 0, 200);
 
-        game = new StockMine(ROUND, MIN, weth, address(router), address(escrow), address(factory));
+        game = _newGame();
         game.setStock(address(nvda), true);
         game.setKeeper(keeper);
-        game.setToken(address(token));
+        game.setToken(address(token), address(curve));
 
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
@@ -47,6 +60,12 @@ contract StockMineTest is Test {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    function _newGame() internal returns (StockMine) {
+        return new StockMine(
+            ROUND, MIN, weth, address(router), address(escrow), address(factory), address(ponsRouter), hook, poolManager
+        );
+    }
 
     function _bit(uint256 square) internal pure returns (uint32) {
         return uint32(1 << square);
@@ -289,14 +308,15 @@ contract StockMineTest is Test {
         escrow.credit{value: 2 ether}(address(game));
 
         vm.prank(keeper);
-        game.closeEpoch(address(nvda), 500, 27e18);
+        game.closeEpoch(address(nvda), 500, 21.6e18);
 
-        // 2.7 ETH at 10 NVDA per ETH, half to miners and half to stakers
+        // pot 2.7 ETH: 20% (0.54) waits for the buyback, 2.16 ETH buy 21.6 NVDA, half to miners, half to stakers
         assertEq(game.epoch(), 1);
         assertEq(game.potEth(), 0);
-        assertEq(game.epochStock(0), 13.5e18);
+        assertEq(game.burnEth(), 0.54 ether);
+        assertEq(game.epochStock(0), 10.8e18);
         assertEq(game.epochToken(0), address(nvda));
-        assertEq(nvda.balanceOf(address(game)), 27e18);
+        assertEq(nvda.balanceOf(address(game)), 21.6e18);
 
         vm.prank(alice);
         game.claim(_one(0));
@@ -304,17 +324,17 @@ contract StockMineTest is Test {
         game.claim(_one(0));
 
         (, uint256 aliceOwed) = game.claimableStock(0, alice);
-        assertEq(aliceOwed, 3.375e18);
+        assertEq(aliceOwed, 2.7e18);
         vm.prank(alice);
         game.claimStock(_one(0));
         vm.prank(bob);
         game.claimStock(_one(0));
-        assertEq(nvda.balanceOf(alice), 3.375e18);
-        assertEq(nvda.balanceOf(bob), 10.125e18);
+        assertEq(nvda.balanceOf(alice), 2.7e18);
+        assertEq(nvda.balanceOf(bob), 8.1e18);
 
         vm.prank(carol);
         game.claimStaking();
-        assertEq(nvda.balanceOf(carol), 13.5e18);
+        assertEq(nvda.balanceOf(carol), 10.8e18);
         assertEq(nvda.balanceOf(address(game)), 0);
     }
 
@@ -332,18 +352,18 @@ contract StockMineTest is Test {
 
         vm.prank(keeper);
         game.closeEpoch(address(nvda), 500, 0);
-        // nobody staked: the miners get all 1.4 ETH worth of stock
-        assertEq(game.epochStock(0), 14e18);
+        // nobody staked: after the 20% burn slice the miners get all 1.12 ETH worth of stock
+        assertEq(game.epochStock(0), 11.2e18);
 
         vm.startPrank(alice);
         game.claim(_one(0));
         game.claimStock(_one(0));
-        assertEq(nvda.balanceOf(alice), 7e18);
+        assertEq(nvda.balanceOf(alice), 5.6e18);
         game.claimStock(_one(0));
-        assertEq(nvda.balanceOf(alice), 7e18);
+        assertEq(nvda.balanceOf(alice), 5.6e18);
         game.claim(_one(round));
         game.claimStock(_one(0));
-        assertEq(nvda.balanceOf(alice), 14e18);
+        assertEq(nvda.balanceOf(alice), 11.2e18);
         vm.stopPrank();
     }
 
@@ -376,8 +396,9 @@ contract StockMineTest is Test {
 
         vm.prank(keeper);
         vm.expectRevert(bytes("Too little received"));
-        game.closeEpoch(address(nvda), 500, 7e18 + 1);
+        game.closeEpoch(address(nvda), 500, 5.6e18 + 1);
         assertEq(game.potEth(), 0.7 ether);
+        assertEq(game.burnEth(), 0);
         assertEq(game.epoch(), 0);
     }
 
@@ -404,7 +425,7 @@ contract StockMineTest is Test {
         (bool ok,) = address(game).call{value: 1 ether}("");
         assertTrue(ok);
         vm.prank(keeper);
-        game.closeEpoch(address(nvda), 500, 0); // 10 NVDA, all to alice
+        game.closeEpoch(address(nvda), 500, 0); // 0.8 ETH after the burn slice: 8 NVDA, all to alice
 
         vm.prank(bob);
         game.stake(300e18);
@@ -412,21 +433,21 @@ contract StockMineTest is Test {
         (ok,) = address(game).call{value: 4 ether}("");
         assertTrue(ok);
         vm.prank(keeper);
-        game.closeEpoch(address(tsla), 3000, 0); // 40 TSLA, 1/4 alice, 3/4 bob
+        game.closeEpoch(address(tsla), 3000, 0); // 3.2 ETH: 32 TSLA, 1/4 alice, 3/4 bob
 
         (address[] memory list, uint256[] memory owed) = game.pendingStaking(alice);
         assertEq(list.length, 2);
-        assertEq(owed[0], 10e18);
-        assertEq(owed[1], 10e18);
+        assertEq(owed[0], 8e18);
+        assertEq(owed[1], 8e18);
 
         vm.prank(alice);
         game.claimStaking();
         vm.prank(bob);
         game.claimStaking();
-        assertEq(nvda.balanceOf(alice), 10e18);
+        assertEq(nvda.balanceOf(alice), 8e18);
         assertEq(nvda.balanceOf(bob), 0);
-        assertEq(tsla.balanceOf(alice), 10e18);
-        assertEq(tsla.balanceOf(bob), 30e18);
+        assertEq(tsla.balanceOf(alice), 8e18);
+        assertEq(tsla.balanceOf(bob), 24e18);
     }
 
     function test_unstake_isLockedAfterEachStake() public {
@@ -469,7 +490,7 @@ contract StockMineTest is Test {
         game.unstake(100e18);
         game.claimStaking();
         vm.stopPrank();
-        assertEq(nvda.balanceOf(alice), 10e18);
+        assertEq(nvda.balanceOf(alice), 8e18);
     }
 
     // ------------------------------------------------------------------ fees and admin
@@ -485,23 +506,29 @@ contract StockMineTest is Test {
 
     function test_admin_boundsAndRoles() public {
         assertEq(game.cutBps(), 700);
+        assertEq(game.burnBps(), 2_000);
         vm.expectRevert(StockMine.BadParam.selector);
-        game.setParams(1_501, 5_000, 1 days);
+        game.setParams(1_501, 5_000, 2_000, 1 days);
         vm.expectRevert(StockMine.BadParam.selector);
-        game.setParams(1_000, 1_999, 1 days);
+        game.setParams(1_000, 1_999, 2_000, 1 days);
         vm.expectRevert(StockMine.BadParam.selector);
-        game.setParams(1_000, 8_001, 1 days);
+        game.setParams(1_000, 8_001, 2_000, 1 days);
         vm.expectRevert(StockMine.BadParam.selector);
-        game.setParams(1_000, 5_000, 14 days + 1);
-        game.setParams(500, 6_000, 1 days);
+        game.setParams(1_000, 5_000, 3_001, 1 days);
+        vm.expectRevert(StockMine.BadParam.selector);
+        game.setParams(1_000, 5_000, 2_000, 14 days + 1);
+        game.setParams(500, 6_000, 1_000, 1 days);
         assertEq(game.cutBps(), 500);
+        assertEq(game.burnBps(), 1_000);
 
         vm.expectRevert(StockMine.TokenAlreadySet.selector);
-        game.setToken(address(tsla));
+        game.setToken(address(token), address(curve));
 
         vm.startPrank(alice);
         vm.expectRevert(StockMine.NotOwner.selector);
-        game.setParams(0, 5_000, 0);
+        game.setParams(0, 5_000, 0, 0);
+        vm.expectRevert(StockMine.NotOwner.selector);
+        game.releaseBurnEth(1);
         vm.expectRevert(StockMine.NotOwner.selector);
         game.setStock(address(tsla), true);
         vm.expectRevert(StockMine.NotOwner.selector);
@@ -511,6 +538,201 @@ contract StockMineTest is Test {
         game.migrateFees(bob);
         assertEq(factory.lastToken(), address(token));
         assertEq(factory.lastRecipient(), bob);
+    }
+
+    // ------------------------------------------------------------------ buyback and burn
+
+    /// @dev Fills the burn reserve: 10 ETH reach the pot, the epoch sets 2 ETH aside.
+    function _fundBurn() internal {
+        token.mint(carol, 1_000e18);
+        vm.startPrank(carol);
+        token.approve(address(game), type(uint256).max);
+        game.stake(1_000e18);
+        vm.stopPrank();
+        (bool ok,) = address(game).call{value: 10 ether}("");
+        assertTrue(ok);
+        vm.expectEmit(address(game));
+        emit BurnFunded(0, 2 ether);
+        vm.expectEmit(address(game));
+        emit EpochClosed(0, address(nvda), 8 ether, 80e18, 0, 80e18);
+        vm.prank(keeper);
+        game.closeEpoch(address(nvda), 500, 0);
+        assertEq(game.burnEth(), 2 ether);
+    }
+
+    function test_buyback_onTheCurveBurnsOnlyWhatItBought() public {
+        _fundBurn();
+        vm.expectEmit(address(game));
+        emit BoughtBackAndBurned(0.5 ether, 500_000e18, true);
+        vm.prank(keeper);
+        game.buybackAndBurn(0.5 ether, 500_000e18);
+
+        assertEq(token.balanceOf(DEAD), 500_000e18);
+        assertEq(game.totalBurned(), 500_000e18);
+        assertEq(game.burnEth(), 1.5 ether);
+        assertEq(ponsRouter.calls(), 0);
+        // carol's stake is still there, untouched by the burn
+        assertEq(token.balanceOf(address(game)), 1_000e18);
+        assertEq(address(game).balance, game.potEth() + game.burnEth() + game.rollover());
+
+        vm.warp(block.timestamp + 3 days);
+        vm.prank(carol);
+        game.unstake(1_000e18);
+        assertEq(token.balanceOf(carol), 1_000e18);
+    }
+
+    function test_buyback_afterGraduationGoesThroughThePonsRouter() public {
+        _fundBurn();
+        curve.setGraduated(true);
+        vm.prank(keeper);
+        vm.expectRevert(bytes("slippage"));
+        game.buybackAndBurn(2 ether, 1_000_000e18 + 1);
+
+        vm.expectEmit(address(game));
+        emit BoughtBackAndBurned(2 ether, 1_000_000e18, false);
+        vm.prank(keeper);
+        game.buybackAndBurn(2 ether, 1);
+
+        // a sold-out curve may still be waiting for its pool: the contract asks for it before swapping
+        assertEq(factory.poolCreations(), 1);
+        assertEq(ponsRouter.calls(), 1);
+        assertEq(ponsRouter.lastRecipient(), address(0));
+        (uint8 kind, address tokenIn, address tokenOut,, uint24 fee, int24 spacing, address hooks,, address manager,) =
+            ponsRouter.lastStep();
+        assertEq(kind, 2);
+        assertEq(tokenIn, address(0));
+        assertEq(tokenOut, address(token));
+        assertEq(fee, 0);
+        assertEq(spacing, 200);
+        assertEq(hooks, hook);
+        assertEq(manager, poolManager);
+        assertEq(token.balanceOf(DEAD), 1_000_000e18);
+        assertEq(game.burnEth(), 0);
+    }
+
+    function test_buyback_guards() public {
+        _fundBurn();
+        vm.prank(alice);
+        vm.expectRevert(StockMine.NotKeeper.selector);
+        game.buybackAndBurn(1 ether, 0);
+
+        vm.startPrank(keeper);
+        vm.expectRevert(StockMine.BadAmount.selector);
+        game.buybackAndBurn(0, 0);
+        vm.expectRevert(StockMine.BadAmount.selector);
+        game.buybackAndBurn(2 ether + 1, 0);
+        vm.expectRevert(bytes("slippage"));
+        game.buybackAndBurn(1 ether, 1_000_000e18 + 1);
+        vm.stopPrank();
+        assertEq(game.burnEth(), 2 ether);
+        assertEq(token.balanceOf(DEAD), 0);
+    }
+
+    function test_buyback_refundOfTheGraduatingBuyStaysBurnMoney() public {
+        _fundBurn();
+        curve.setCap(0.5 ether); // the curve sells out after 0.5 ETH and sends the rest back
+        uint256 potBefore = game.potEth();
+
+        vm.expectEmit(address(game));
+        emit BoughtBackAndBurned(0.5 ether, 500_000e18, true);
+        vm.prank(keeper);
+        game.buybackAndBurn(2 ether, 1);
+
+        assertEq(game.burnEth(), 1.5 ether);
+        assertEq(game.potEth(), potBefore);
+        assertEq(token.balanceOf(DEAD), 500_000e18);
+        assertTrue(curve.graduated());
+        assertEq(address(game).balance, game.potEth() + game.burnEth() + game.rollover());
+
+        // what is left goes through the router from now on
+        vm.prank(keeper);
+        game.buybackAndBurn(1.5 ether, 1);
+        assertEq(game.burnEth(), 0);
+        assertEq(token.balanceOf(DEAD), 500_000e18 + 750_000e18);
+    }
+
+    function test_buyback_rejectsAVenueThatUnderDelivers() public {
+        _fundBurn();
+        curve.setCheat(true);
+        vm.prank(keeper);
+        vm.expectRevert(StockMine.BadAmount.selector);
+        game.buybackAndBurn(1 ether, 1_000e18);
+
+        curve.setGraduated(true);
+        ponsRouter.setCheat(true);
+        vm.prank(keeper);
+        vm.expectRevert(StockMine.BadAmount.selector);
+        game.buybackAndBurn(1 ether, 1_000e18);
+
+        assertEq(game.burnEth(), 2 ether);
+        assertEq(token.balanceOf(DEAD), 0);
+    }
+
+    function test_burnSlice_waitsForTheToken() public {
+        StockMine fresh = _newGame();
+        fresh.setStock(address(nvda), true);
+        uint8 w = _predictFor(fresh, 0);
+        vm.prank(alice);
+        fresh.deploy{value: 1 ether}(_bit(w));
+        vm.prank(bob);
+        fresh.deploy{value: 10 ether}(_bit(_other(w)));
+        vm.warp(fresh.roundEndsAt(0));
+        fresh.close(0);
+        arb.roll(fresh.TARGET_DELAY() + 1);
+        fresh.settle(0);
+
+        fresh.closeEpoch(address(nvda), 500, 0);
+        // no token bound: nothing is set aside, the whole 0.7 ETH buys stock
+        assertEq(fresh.burnEth(), 0);
+        assertEq(fresh.epochStock(0), 7e18);
+
+        vm.expectRevert(StockMine.TokenNotSet.selector);
+        fresh.buybackAndBurn(1, 0);
+    }
+
+    function test_burnSlice_canBeSwitchedOffAndReleased() public {
+        _fundBurn();
+        vm.expectEmit(address(game));
+        emit BurnReleased(0.5 ether);
+        game.releaseBurnEth(0.5 ether);
+        assertEq(game.burnEth(), 1.5 ether);
+        assertEq(game.potEth(), 0.5 ether);
+        vm.expectRevert(StockMine.BadAmount.selector);
+        game.releaseBurnEth(1.5 ether + 1);
+
+        game.setParams(700, 5_000, 0, 3 days);
+        vm.prank(keeper);
+        game.closeEpoch(address(nvda), 500, 0);
+        assertEq(game.burnEth(), 1.5 ether); // unchanged: the released 0.5 ETH all went to stock
+    }
+
+    function test_setToken_onlyAcceptsThePairThePonsFactoryRecorded() public {
+        StockMine fresh = _newGame();
+        MockCurve other = new MockCurve(token); // right token() but not the launch's curve
+        vm.expectRevert(StockMine.BadParam.selector);
+        fresh.setToken(address(token), address(other));
+        vm.expectRevert(StockMine.BadParam.selector);
+        fresh.setToken(address(token), address(0));
+        vm.expectRevert(StockMine.BadParam.selector);
+        fresh.setToken(address(tsla), address(curve)); // never launched on Pons
+
+        // a launch priced in something other than ETH cannot be bought back with ETH
+        MockCurve usdCurve = new MockCurve(nvda);
+        factory.setLaunch(address(nvda), address(usdCurve), address(tsla), 0, 200);
+        vm.expectRevert(StockMine.BadParam.selector);
+        fresh.setToken(address(nvda), address(usdCurve));
+
+        // the pool settings come from the launch record, whatever they are
+        factory.setLaunch(address(token), address(curve), address(0), 3000, 60);
+        fresh.setToken(address(token), address(curve));
+        assertEq(address(fresh.ponsCurve()), address(curve));
+        assertEq(fresh.ponsPoolFee(), 3000);
+        assertEq(fresh.ponsPoolTickSpacing(), 60);
+    }
+
+    function _predictFor(StockMine g, uint256 round) internal view returns (uint8) {
+        bytes32 h = keccak256(abi.encode("l2-block", arb.number() + g.TARGET_DELAY()));
+        return uint8(uint256(keccak256(abi.encode(h, round, address(g)))) % 25);
     }
 
     function test_setStock_capsTheList() public {

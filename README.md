@@ -15,14 +15,24 @@ token, they are **tokenized stocks** bought on Uniswap with real revenue.
    over to the next round that has winners.
 4. **The pot.** The cut of every round and the **Pons creator fees** of the project token accumulate as ETH
    in `potEth`. Any ETH sent to the contract joins the pot. See "Fee phases" for who collects the Pons fees.
-5. **Epochs.** The keeper calls `closeEpoch(stock, poolFee, minOut)`: the whole pot is swapped for one
-   allowed stock (NVDA, TSLA, SPY, AAPL, ...) through SwapRouter02 and split between
-   - the **miners** of the epoch, in proportion to their winning stakes (`claimStock`), and
-   - the **stakers** of the project token, in proportion to their stake (`claimStaking`).
-   The split is 50/50 by default (20–80 % bounds). With no stakers everything goes to miners and vice versa.
+5. **Epochs.** The keeper calls `closeEpoch(stock, poolFee, minOut)`. With the defaults the pot is split
+   **40 / 40 / 20**:
+   - first the **burn slice** (`burnBps`, 20 % by default, 30 % hard cap) moves to `burnEth`. Nothing is set
+     aside until a token is bound with `setToken`;
+   - the rest is swapped for one allowed stock (NVDA, TSLA, SPY, AAPL, ...) through SwapRouter02 and split
+     between the **miners** of the epoch, in proportion to their winning stakes (`claimStock`), and the
+     **stakers** of the project token, in proportion to their stake (`claimStaking`). That split is 50/50
+     by default (20–80 % bounds). With no stakers everything goes to miners and vice versa.
+6. **Buyback and burn.** The keeper calls `buybackAndBurn(ethAmount, minOut)`, in slices if it wants: the
+   ETH buys the project token on its Pons bonding curve until the launch graduates, then on its Uniswap v4
+   pool through the Pons router, and everything bought goes to `0x…dEaD`. If a buy is the one that sells the
+   curve out, Pons refunds the ETH it did not need: the refund stays in the burn reserve. If the curve sold
+   out but its pool was never created, the contract asks the factory to create it before swapping.
 
 The project token is a plain fixed-supply Pons token: nothing is ever minted as a reward, which is why the
-design fits a Pons launch. `setToken` binds the token to the contract once, after the launch.
+design fits a Pons launch. After the launch, `setToken(token, curve)` binds both once. The pair must be the
+one the Pons factory recorded (`getLaunchedToken`) and must be priced in ETH; the pool fee and tick spacing
+used for buybacks are read from that record.
 
 ## Fee phases
 
@@ -54,10 +64,13 @@ cast send 0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e "transferCreatorFeeRecipien
 ## Trust model
 
 - Player ETH is accounted separately from the pot. No role can move it.
-- The owner can: allow/disallow stocks (max 16), set cut / split / unstake delay within hard bounds, pause
-  **new deployments only** (closing, settling and all claims always work), set the keeper, bind the token
-  once, and redirect the Pons creator fees to a new recipient (`migrateFees`, for a future version).
-- The keeper chooses which allowed stock an epoch buys and the minimum amount out.
+- The owner can: allow/disallow stocks (max 16), set cut / split / burn slice / unstake delay within hard
+  bounds, pause **new deployments only** (closing, settling and all claims always work), set the keeper,
+  bind the token once, move burn reserve back to the pot (`releaseBurnEth`, the way out if the buyback route
+  ever breaks), and redirect the Pons creator fees to any address (`migrateFees`, meant for a future version).
+- The keeper chooses which allowed stock an epoch buys, when the buyback runs, and the minimum amounts out.
+- The pot and the burn reserve are not player funds: the owner decides which allowed stock the pot buys and
+  controls the stock list, so the pot is only as trustworthy as the owner. Player ETH on the grid stays out of the owner's reach.
 - Randomness is the hash of a future L2 block. Players and the keeper cannot predict it; the sequencer could.
   `close` and `settle` are permissionless, so a keeper bot should run them every round; if only an
   adversary were watching, they could let unfavourable draws expire and re-close.
@@ -72,6 +85,9 @@ cast send 0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e "transferCreatorFeeRecipien
 | Pons factory v2 | `0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e` |
 | Pons fee escrow | `0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e` |
 | Pons launch + buy router | `0xe33E9E479dF8802cb0866d5d05258bEc4cF62948` |
+| Pons swap router (graduated launches) | `0x65050A9b7E5075A2bA5cED7b1b64EE66262c40Dc` |
+| Pons meme hook | `0xE5e702641Ea86F4ae6cC3cDaeD2B886f976Be044` |
+| Uniswap v4 PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` |
 
 Pons: launch fee 0.0005 ETH, curve fee 1 % (30 % protocol, rest to the creator), optional creator tax up to
 10 % set at launch and immutable, fees paid in ETH and pulled with `claim()` by the recipient, which may be
@@ -82,9 +98,9 @@ AAPL/WETH 0.05 %.
 
 ```bash
 forge test                      # unit tests, mocks only
-FORK=1 forge test -vv           # adds the fork tests: real router, real stocks, real Pons escrow
+FORK=1 forge test -j 1 -vv      # adds the fork tests: real router, stocks, Pons escrow, curve and v4 pool
 ```
 
 ## Not built yet
 
-Keeper bot (close/settle every round, closeEpoch), web app, deploy script, Pons launch script for the token.
+Keeper bot (close/settle every round, `closeEpoch`, `buybackAndBurn`). The token is launched by hand on Pons.

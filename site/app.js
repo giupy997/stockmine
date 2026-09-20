@@ -248,6 +248,9 @@ function startSimulation() {
   // rough stock units per ETH, only to make the simulated numbers look plausible
   const UNITS_PER_ETH_X10 = { NVDA: 117n, TSLA: 72n, SPY: 34n, AAPL: 78n };
   const SIM_LOCK_S = 60;
+  const BURN = 2000n; // bps of every pot
+  const DEMO_TOKENS_PER_ETH = 5_000_000n;
+  let simBurned = 0n;
   const sim = { genesis: Date.now() / 1000, revealing: false };
   view.duration = 20;
   view.round = 1;
@@ -323,8 +326,12 @@ function startSimulation() {
 
   function closeEpoch() {
     const symbol = STOCKS[Math.floor(Math.random() * STOCKS.length)];
-    const bought = (view.pot * (UNITS_PER_ETH_X10[symbol] ?? 50n)) / 10n;
-    log(`<b>epoch ${view.epoch}</b> pot ${fmt(view.pot)} ETH → <span>${fmt(bought, 2)} ${symbol}</span> · half to miners · half to stakers`);
+    const toBurn = (view.pot * BURN) / 10000n;
+    const bought = ((view.pot - toBurn) * (UNITS_PER_ETH_X10[symbol] ?? 50n)) / 10n;
+    simBurned += toBurn * DEMO_TOKENS_PER_ETH;
+    log(`<b>buyback</b> ${fmt(toBurn)} ETH → <span>${fmtTok(toBurn * DEMO_TOKENS_PER_ETH)} tokens burned</span>`);
+    log(`<b>epoch ${view.epoch}</b> pot ${fmt(view.pot)} ETH → <span>${fmt(bought, 2)} ${symbol}</span> · 40% miners · 40% stakers · 20% burn`);
+    $("burn-stats").textContent = `Burned so far: ${fmtTok(simBurned)} demo tokens (simulated).`;
     if (vault.mine > 0n) {
       const mineShare = (bought / 2n) * vault.mine / vault.total;
       vault.earned.find((e) => e.symbol === symbol).amount += mineShare;
@@ -419,11 +426,17 @@ async function startLive() {
     "function unstake(uint256 amount)",
     "function claimStaking()",
     "function minersShareBps() view returns (uint256)",
+    "function burnBps() view returns (uint256)",
+    "function burnEth() view returns (uint256)",
+    "function totalBurned() view returns (uint256)",
+    "function ponsCurve() view returns (address)",
     "event RoundSettled(uint256 indexed round, uint8 winner, uint256 total, uint256 winnersStake, uint256 prize, uint256 cut)",
     ...["NotOwner", "NotKeeper", "Reentrancy", "Paused", "BadMask", "BadAmount", "BadParam", "RoundNotOver", "RoundEmpty",
       "RoundNotOpen", "RoundNotClosed", "RoundNotSettled", "TargetNotReached", "TargetStillValid", "TargetExpired",
       "StockNotAllowed", "NothingToDistribute", "TokenAlreadySet", "TokenNotSet", "StakeLocked", "TransferFailed"].map((n) => `error ${n}()`),
     "event EpochClosed(uint256 indexed epoch, address indexed stock, uint256 ethSpent, uint256 bought, uint256 toMiners, uint256 toStakers)",
+    "event BurnFunded(uint256 indexed epoch, uint256 eth)",
+    "event BoughtBackAndBurned(uint256 ethSpent, uint256 tokensBurned, bool onCurve)",
   ]);
   const erc20 = parseAbi([
     "function symbol() view returns (string)",
@@ -468,18 +481,31 @@ async function startLive() {
   link.href = `${CONFIG.EXPLORER}/address/${address}`;
   link.hidden = false;
 
-  const [genesis, duration, minPerSquare, cutBps, token, unstakeDelay, minersBps] = await Promise.all([
-    read("genesis"), read("roundDuration"), read("minPerSquare"), read("cutBps"), read("token"), read("unstakeDelay"), read("minersShareBps"),
+  const [genesis, duration, minPerSquare, cutBps, token, unstakeDelay, minersBps, burnBps] = await Promise.all([
+    read("genesis"), read("roundDuration"), read("minPerSquare"), read("cutBps"), read("token"), read("unstakeDelay"), read("minersShareBps"), read("burnBps"),
   ]);
   view.duration = Number(duration);
   $("fact-round").textContent = `${view.duration} s`;
   $("fact-cut").textContent = `${Number(cutBps) / 100} %`;
   $("stat-cut").textContent = `${Number(cutBps) / 100}%`;
   $("tile-cut").textContent = `${Number(cutBps) / 100} %`;
-  const minersPct = Number(minersBps) / 100;
-  $("stat-split").textContent = `${minersPct} / ${100 - minersPct}`;
-  $("split-miners").textContent = `${minersPct} %`;
-  $("split-stakers").textContent = `${100 - minersPct} %`;
+  // the burn slice comes off the pot first, the rest is split between miners and stakers
+  const hasCurve = !/^0x0{40}$/.test(await read("ponsCurve"));
+  const burnPct = hasCurve ? Number(burnBps) / 100 : 0;
+  const pct = (n) => String(Math.round(n * 10) / 10);
+  const minersPct = ((100 - burnPct) * Number(minersBps)) / 10000;
+  const stakersPct = 100 - burnPct - minersPct;
+  $("stat-split").textContent = `${pct(minersPct)} / ${pct(stakersPct)} / ${pct(burnPct)}`;
+  $("split-miners").textContent = `${pct(minersPct)} %`;
+  $("split-stakers").textContent = `${pct(stakersPct)} %`;
+  // before the token is bound nothing is set aside: say so instead of showing a slice that is not taken yet
+  $("split-burn").textContent = hasCurve ? `${pct(burnPct)} %` : `0 % now · ${pct(Number(burnBps) / 100)} % once the token is live`;
+  $("stake-share-of-pot").textContent = `${pct(stakersPct)} %`;
+  async function refreshBurn() {
+    if (!hasCurve) return;
+    const [burned, waiting] = await Promise.all([read("totalBurned"), read("burnEth")]);
+    $("burn-stats").textContent = `Burned so far: ${fmtTok(burned)} tokens · waiting for the next buyback: ${fmt(waiting)} ETH`;
+  }
   ui.stakeDelay.textContent = timeLeft(Number(unstakeDelay)).replace(/^in /, "") || "0s";
   const hasToken = !/^0x0{40}$/.test(token);
   if (hasToken) {
@@ -763,8 +789,22 @@ async function startLive() {
   pub.watchContractEvent({
     address, abi, eventName: "EpochClosed", pollingInterval: 8000,
     onLogs: (logs) => {
-      logs.forEach((l) => log(`<b>epoch ${l.args.epoch}</b> pot ${fmt(l.args.ethSpent)} ETH → <span>${CONFIG.STOCKS[l.args.stock.toLowerCase()] || short(l.args.stock)}</span>`));
+      logs.forEach((l) => log(`<b>epoch ${l.args.epoch}</b> ${fmt(l.args.ethSpent)} ETH spent on <span>${CONFIG.STOCKS[l.args.stock.toLowerCase()] || short(l.args.stock)}</span>`));
       refreshVault().catch(() => {});
+    },
+  });
+  pub.watchContractEvent({
+    address, abi, eventName: "BurnFunded", pollingInterval: 8000,
+    onLogs: (logs) => {
+      logs.forEach((l) => log(`<b>epoch ${l.args.epoch}</b> ${fmt(l.args.eth)} ETH set aside for <span>buyback and burn</span>`));
+      refreshBurn().catch(() => {});
+    },
+  });
+  pub.watchContractEvent({
+    address, abi, eventName: "BoughtBackAndBurned", pollingInterval: 8000,
+    onLogs: (logs) => {
+      logs.forEach((l) => log(`<b>buyback</b> ${fmt(l.args.ethSpent)} ETH → <span>${fmtTok(l.args.tokensBurned)} tokens burned</span>`));
+      refreshBurn().catch(() => {});
     },
   });
 
@@ -777,7 +817,9 @@ async function startLive() {
   loop();
   refreshVault().catch(() => {});
   refreshPending().catch(() => {});
+  refreshBurn().catch(() => {});
   setInterval(() => refreshPending().catch(() => {}), 5000);
+  setInterval(() => refreshBurn().catch(() => {}), 20000);
   setInterval(() => refreshClaims().catch(() => {}), 10000);
   setInterval(() => refreshVault().catch(() => {}), 12000);
 }

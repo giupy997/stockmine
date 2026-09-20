@@ -170,12 +170,16 @@ h2 { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.2vw
 .card-green .big { color: rgba(6, 7, 5, 0.18); }
 .card-green p { color: rgba(6, 7, 5, 0.75); }
 
-.bento { display: grid; grid-template-columns: 1fr 1.25fr 1fr; grid-template-areas: "a core c" "b core d"; gap: 14px; }
+.bento { display: grid; grid-template-columns: 1fr 1.25fr 1fr; grid-template-areas: "a core c" "a core c" "a core d" "b core d" "b core e" "b core e"; gap: 14px; }
 .tile { padding: 26px; border-radius: var(--r-lg); background: var(--cream-2); display: flex; flex-direction: column; gap: 8px; }
 .tile small { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #0b7a10; }
 .tile h3 { font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: -0.03em; line-height: 1.15; }
 .tile p { font-size: 15px; color: var(--dim-ink); }
 .tile-a { grid-area: a; } .tile-b { grid-area: b; } .tile-c { grid-area: c; } .tile-d { grid-area: d; }
+.tile-e { grid-area: e; background: var(--black); color: var(--cream); }
+.tile-e small { color: var(--green-hi); }
+.tile-e p { color: var(--dim); }
+.tile-e .burn-stats { margin-top: 6px; font-weight: 700; color: var(--green-hi); font-variant-numeric: tabular-nums; }
 .tile-core { grid-area: core; justify-content: center; background: radial-gradient(120% 90% at 50% 0%, #12351a, var(--black) 70%); color: var(--cream); box-shadow: 0 40px 70px -40px rgba(0, 200, 5, 0.9); }
 .tile-core small { color: var(--green-hi); }
 .tile-core h3 { font-size: clamp(24px, 2.6vw, 34px); font-weight: 800; text-transform: uppercase; }
@@ -216,7 +220,7 @@ h2 { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.2vw
 @media (max-width: 1180px) {
   .cockpit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "deck deck" "clock controls" "feed feed"; max-width: 640px; margin: 0 auto; }
   .cards { grid-template-columns: repeat(2, 1fr); }
-  .bento { grid-template-columns: 1fr 1fr; grid-template-areas: "core core" "a b" "c d"; }
+  .bento { grid-template-columns: 1fr 1fr; grid-template-areas: "core core" "a b" "c d" "e e"; }
   .trust { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
@@ -230,7 +234,7 @@ h2 { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4.2vw
   .ring { max-width: 150px; }
   .cards { grid-template-columns: 1fr; }
   .card { min-height: 190px; }
-  .bento { grid-template-columns: 1fr; grid-template-areas: "core" "a" "b" "c" "d"; }
+  .bento { grid-template-columns: 1fr; grid-template-areas: "core" "a" "b" "c" "d" "e"; }
   .block-head { grid-template-columns: 1fr; }
   .sub, .facts { grid-column: 1; }
   .footer { flex-direction: column; }

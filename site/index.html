@@ -41,7 +41,7 @@
       </div>
       <ul class="hero-stats" aria-label="Key numbers">
         <li><b id="stat-cut">7%</b><span>of the losing squares goes to the pot</span></li>
-        <li><b id="stat-split">50 / 50</b><span>pot split: miners and stakers</span></li>
+        <li><b id="stat-split">40 / 40 / 20</b><span>miners · stakers · buyback and burn</span></li>
         <li><b>0</b><span>tokens minted as rewards</span></li>
       </ul>
     </section>
@@ -95,8 +95,8 @@
 
     <div class="tape" aria-hidden="true">
       <div class="tape-track">
-        <span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span><span>rewards in real shares</span><span>no emissions</span><span>paid from fees</span>
-        <span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span><span>rewards in real shares</span><span>no emissions</span><span>paid from fees</span>
+        <span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span><span>rewards in real shares</span><span>no emissions</span><span>buyback and burn</span><span>paid from fees</span>
+        <span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span><span>rewards in real shares</span><span>no emissions</span><span>buyback and burn</span><span>paid from fees</span>
       </div>
     </div>
   </div>
@@ -123,15 +123,16 @@
     <section class="block" id="pot">
       <header class="block-head">
         <span class="index">02</span>
-        <h2>Two streams of ETH become shares</h2>
-        <p class="sub">No reward token is minted in the background. The stocks are bought on Uniswap with ETH that actually came in.</p>
+        <h2>Two streams of ETH, three destinations</h2>
+        <p class="sub">No reward token is minted in the background. The stocks are bought on Uniswap with ETH that actually came in, and a slice of the same ETH buys the project token back and burns it.</p>
       </header>
       <div class="bento">
         <article class="tile tile-a reveal"><small>Stream A</small><h3>Cut of every round</h3><p><span id="tile-cut">7 %</span> of the losing squares. Hard cap 15 % in the contract.</p></article>
         <article class="tile tile-b reveal"><small>Stream B</small><h3>Creator fees on Pons</h3><p>Phase one: the dev wallet collects them on Pons and sends them to the pot by hand. Phase two: the contract becomes the fee recipient and pulls them itself.</p></article>
-        <article class="tile tile-core reveal"><small>Every epoch</small><h3>Pot → Uniswap → one stock</h3><p>The keeper picks one allowed stock and a minimum amount out. The whole pot is swapped in a single transaction.</p><div class="tickers"><span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span></div></article>
-        <article class="tile tile-c reveal"><small id="split-miners">50 %</small><h3>Miners</h3><p>Shared by the epoch's winners, in proportion to their winning stakes.</p></article>
-        <article class="tile tile-d reveal"><small id="split-stakers">50 %</small><h3>Stakers</h3><p>Shared by the people staking the project token, in proportion to their stake. While nobody stakes, the whole purchase goes to the miners, and the other way round.</p></article>
+        <article class="tile tile-core reveal"><small>Every epoch</small><h3>Pot → Uniswap → one stock</h3><p>First the burn slice is set aside. Then the keeper picks one allowed stock and a minimum amount out, and the rest of the pot is swapped in a single transaction.</p><div class="tickers"><span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span></div></article>
+        <article class="tile tile-c reveal"><small id="split-miners">40 %</small><h3>Miners</h3><p>Shared by the epoch's winners, in proportion to their winning stakes.</p></article>
+        <article class="tile tile-d reveal"><small id="split-stakers">40 %</small><h3>Stakers</h3><p>Shared by the people staking the project token, in proportion to their stake. While nobody stakes, the whole purchase goes to the miners, and the other way round.</p></article>
+        <article class="tile tile-e reveal"><small id="split-burn">20 %</small><h3>Buyback and burn</h3><p>Spent buying the project token on Pons, on its curve first and on its Uniswap pool after graduation. Everything it buys goes to the burn address, so the supply only goes down.</p><p class="burn-stats" id="burn-stats">Starts when the token is live.</p></article>
       </div>
     </section>
 
@@ -140,7 +141,7 @@
         <div class="vault-copy">
           <div class="vault-head"><span class="index">03</span><span class="tag" id="stake-tag">SIMULATION</span></div>
           <h2>Stake the token, earn the shares</h2>
-          <p>Half of every stock purchase is shared by the people staking the project token, in proportion to their stake. You stake and unstake here, from this page. After each new stake your tokens stay locked for <b id="stake-delay">3 days</b>.</p>
+          <p>Half of every stock purchase (<span id="stake-share-of-pot">40 %</span> of the pot) is shared by the people staking the project token, in proportion to their stake. You stake and unstake here, from this page. After each new stake your tokens stay locked for <b id="stake-delay">3 days</b>.</p>
           <dl class="vault-stats">
             <div><dt>Your stake</dt><dd id="stake-mine">0</dd></div>
             <div><dt>Total staked</dt><dd id="stake-total">0</dd></div>
@@ -181,7 +182,8 @@
           <ul>
             <li>Touch the ETH players put on the grid. It is accounted apart from the pot.</li>
             <li>Stop you from closing, drawing or claiming. Pause only blocks new deployments.</li>
-            <li>Raise the cut above 15 % or push the split outside 20–80 %.</li>
+            <li>Raise the cut above 15 %, the burn slice above 30 %, or push the miners/stakers split outside 20–80 %.</li>
+            <li>Send the burn reserve anywhere except the token's own Pons curve and pool, the pair the Pons factory recorded, or back to the pot.</li>
             <li>Mint anything. The token has a fixed supply from its Pons launch.</li>
           </ul>
         </article>
@@ -190,7 +192,8 @@
           <ul>
             <li>Choose which allowed stock an epoch buys, and the slippage limit.</li>
             <li>Add or remove stocks from the allowed list (16 at most).</li>
-            <li>Tune cut, split and unstake delay inside the hard bounds.</li>
+            <li>Tune cut, split, burn slice and unstake delay inside the hard bounds.</li>
+            <li>Decide when the buyback runs and with which slippage limit.</li>
             <li>Redirect the Pons creator fees to another address. It is meant for a future version of the contract, but the code accepts any address.</li>
           </ul>
         </article>

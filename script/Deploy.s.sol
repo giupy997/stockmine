@@ -11,13 +11,18 @@ contract Deploy is Script {
     address constant ROUTER = 0xCaf681a66D020601342297493863E78C959E5cb2;
     address constant PONS_ESCROW = 0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e;
     address constant PONS_FACTORY = 0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e;
+    address constant PONS_ROUTER = 0x65050A9b7E5075A2bA5cED7b1b64EE66262c40Dc;
+    address constant PONS_HOOK = 0xE5e702641Ea86F4ae6cC3cDaeD2B886f976Be044;
+    address constant POOL_MANAGER = 0x8366a39CC670B4001A1121B8F6A443A643e40951;
 
     function run() external {
         uint256 roundDuration = vm.envOr("ROUND_DURATION", uint256(60));
         uint256 minPerSquare = vm.envOr("MIN_PER_SQUARE", uint256(0.0001 ether));
 
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
-        StockMine game = new StockMine(roundDuration, minPerSquare, WETH, ROUTER, PONS_ESCROW, PONS_FACTORY);
+        StockMine game = new StockMine(
+            roundDuration, minPerSquare, WETH, ROUTER, PONS_ESCROW, PONS_FACTORY, PONS_ROUTER, PONS_HOOK, POOL_MANAGER
+        );
         game.setStock(0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC, true); // NVDA
         game.setStock(0x322F0929c4625eD5bAd873c95208D54E1c003b2d, true); // TSLA
         game.setStock(0x117cc2133c37B721F49dE2A7a74833232B3B4C0C, true); // SPY
@@ -25,6 +30,6 @@ contract Deploy is Script {
         vm.stopBroadcast();
 
         console2.log("StockMine:", address(game));
-        console2.log("Use this address as creatorFeeRecipient in the Pons launch, then call setToken(token).");
+        console2.log("After the Pons launch call setToken(token, curve): both addresses are in the TokenLaunched event.");
     }
 }

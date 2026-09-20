@@ -6,7 +6,14 @@
   <title>STOCKMINE — mine stocks, not tokens</title>
   <meta name="description" content="A round game on Robinhood Chain. Every round one square of the grid wins; the rewards are tokenized stocks bought with real fees, not a freshly printed token.">
   <meta name="theme-color" content="#060705">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23060705'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%2300c805'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="STOCKMINE — mine stocks, not tokens">
+  <meta property="og:description" content="A round game on Robinhood Chain. Rewards in tokenized stocks, paid from fees. Nothing is minted to pay you.">
+  <meta property="og:image" content="assets/og.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="assets/og.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@400;600;800&display=swap" rel="stylesheet">
@@ -14,7 +21,7 @@
 </head>
 <body>
   <header class="nav">
-    <a class="brand" href="#top" aria-label="Stockmine home"><span class="orb" aria-hidden="true"></span>stockmine</a>
+    <a class="brand" href="#top" aria-label="Stockmine home"><img class="brand-word" src="assets/wordmark-dark.webp" width="720" height="147" alt="STOCKMINE"></a>
     <nav class="nav-links" aria-label="Sections">
       <a href="#grid">Play</a>
       <a href="#how">Rounds</a>
@@ -112,11 +119,14 @@
           <div><dt>Cut to the pot</dt><dd id="fact-cut">7 %</dd></div>
         </dl>
       </header>
+      <div class="rounds">
+      <figure class="art art-rounds reveal"><img src="assets/round-timer.webp" width="900" height="900" alt="A black round timer with a single green hand" loading="lazy" decoding="async"></figure>
       <div class="cards">
         <article class="card reveal"><span class="big">1</span><h3>Deploy</h3><p>Put ETH on one or more squares. Your amount is split equally across the squares you pick.</p></article>
         <article class="card reveal"><span class="big">2</span><h3>Close</h3><p>When the clock hits zero anyone can close the round. That fixes a block about one second in the future.</p></article>
         <article class="card reveal"><span class="big">3</span><h3>Draw</h3><p>The hash of that block picks the winning square. Nobody can know it while the round is open.</p></article>
         <article class="card card-green reveal"><span class="big">4</span><h3>Collect</h3><p>Winners take their stake back plus the ETH of the other squares, pro rata, minus the cut for the pot.</p></article>
+      </div>
       </div>
     </section>
 
@@ -129,10 +139,10 @@
       <div class="bento">
         <article class="tile tile-a reveal"><small>Stream A</small><h3>Cut of every round</h3><p><span id="tile-cut">7 %</span> of the losing squares. Hard cap 15 % in the contract.</p></article>
         <article class="tile tile-b reveal"><small>Stream B</small><h3>Creator fees on Pons</h3><p>Phase one: the dev wallet collects them on Pons and sends them to the pot by hand. Phase two: the contract becomes the fee recipient and pulls them itself.</p></article>
-        <article class="tile tile-core reveal"><small>Every epoch</small><h3>Pot → Uniswap → one stock</h3><p>First the burn slice is set aside. Then the keeper picks one allowed stock and a minimum amount out, and the rest of the pot is swapped in a single transaction.</p><div class="tickers"><span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span></div></article>
+        <article class="tile tile-core reveal"><img class="tile-art" src="assets/two-streams.webp" width="900" height="720" alt="Two streams, one of ETH and one from the token, pour into one stone pot" loading="lazy" decoding="async"><small>Every epoch</small><h3>Pot → Uniswap → one stock</h3><p>First the burn slice is set aside. Then the keeper picks one allowed stock and a minimum amount out, and the rest of the pot is swapped in a single transaction.</p><div class="tickers"><span>NVDA</span><span>TSLA</span><span>SPY</span><span>AAPL</span></div></article>
         <article class="tile tile-c reveal"><small id="split-miners">40 %</small><h3>Miners</h3><p>Shared by the epoch's winners, in proportion to their winning stakes.</p></article>
         <article class="tile tile-d reveal"><small id="split-stakers">40 %</small><h3>Stakers</h3><p>Shared by the people staking the project token, in proportion to their stake. While nobody stakes, the whole purchase goes to the miners, and the other way round.</p></article>
-        <article class="tile tile-e reveal"><small id="split-burn">20 %</small><h3>Buyback and burn</h3><p>Spent buying the project token on Pons, on its curve first and on its Uniswap pool after graduation. Everything it buys goes to the burn address, so the supply only goes down.</p><p class="burn-stats" id="burn-stats">Starts when the token is live.</p></article>
+        <article class="tile tile-e reveal"><img class="tile-art" src="assets/no-emissions.webp" width="800" height="500" alt="" loading="lazy" decoding="async"><small id="split-burn">20 %</small><h3>Buyback and burn</h3><p>Spent buying the project token on Pons, on its curve first and on its Uniswap pool after graduation. Everything it buys goes to the burn address, so the supply only goes down.</p><p class="burn-stats" id="burn-stats">Starts when the token is live.</p></article>
       </div>
     </section>
 
@@ -206,11 +216,20 @@
             <li>This is a game of chance. You can lose all the ETH you put on the grid.</li>
           </ul>
         </article>
+        <figure class="art art-rules reveal"><img src="assets/clear-rules.webp" width="900" height="900" alt="A glass plaque on a stone base: no new tokens, paid from fees, real stocks, on Uniswap. Clear rules, real rewards." loading="lazy" decoding="async"></figure>
+      </div>
+    </section>
+
+    <section class="strip" aria-hidden="true">
+      <div class="strip-track">
+        <img src="assets/g-one-square.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-cube.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-eth-in.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-extra.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-rock.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-proportion.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-crystal-slot.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-tokenized.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-market.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-reserve.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-book.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-part.webp" width="640" height="640" alt="" loading="lazy" decoding="async">
+        <img src="assets/g-one-square.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-cube.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-eth-in.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-extra.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-rock.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-proportion.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-crystal-slot.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-tokenized.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-market.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-reserve.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-book.webp" width="640" height="640" alt="" loading="lazy" decoding="async"><img src="assets/g-part.webp" width="640" height="640" alt="" loading="lazy" decoding="async">
       </div>
     </section>
 
     <section class="block" id="token">
       <div class="token reveal">
+        <img class="token-art" src="assets/crystal.webp" width="900" height="900" alt="" loading="lazy" decoding="async">
         <span class="index">05</span>
         <h2 id="token-title">Token: not launched</h2>
         <p id="token-note">It comes after the game works, on Pons, with a fixed supply. Staking it will earn a share of every stock purchase. Until a contract address appears <strong>on this page</strong>, anything using this name is not us.</p>
@@ -222,7 +241,7 @@
   <footer class="footer">
     <div class="wordmark" aria-hidden="true">stockmine</div>
     <div class="footer-copy">
-      <span class="brand"><span class="orb" aria-hidden="true"></span>stockmine</span>
+      <img class="footer-wordmark" src="assets/wordmark-light.webp" width="720" height="198" alt="STOCKMINE" loading="lazy" decoding="async">
       <p>Not affiliated with Robinhood Markets, Inc. or with the issuers of any stock. Tokenized stocks are third-party tokens traded on Uniswap. Not available where games of chance with money are prohibited. Nothing here is investment advice.</p>
     </div>
     <div class="footer-links">
